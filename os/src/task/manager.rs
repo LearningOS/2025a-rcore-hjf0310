@@ -25,6 +25,20 @@ impl TaskManager {
     pub fn fetch(&mut self) -> Option<Arc<TaskControlBlock>> {
         self.ready_queue.pop_front()
     }
+    ///stride algorithm
+    pub fn stride(&mut self)->Option<Arc<TaskControlBlock>>{
+        let mut minnum:isize=99999;
+        let mut minlabel:usize=0;
+        let mut label:usize=0;
+        for i in self.ready_queue.iter(){
+            if i.get_stride()<minnum{
+                minnum=i.get_stride();
+                minlabel=label;
+            }
+            label+=1;
+        }
+        self.ready_queue.remove(minlabel)
+    }
 }
 
 lazy_static! {
@@ -43,4 +57,8 @@ pub fn add_task(task: Arc<TaskControlBlock>) {
 pub fn fetch_task() -> Option<Arc<TaskControlBlock>> {
     //trace!("kernel: TaskManager::fetch_task");
     TASK_MANAGER.exclusive_access().fetch()
+}
+///
+pub fn stride_task()->Option<Arc<TaskControlBlock>>{
+    TASK_MANAGER.exclusive_access().stride()
 }

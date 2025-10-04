@@ -32,7 +32,8 @@ lazy_static! {
 }
 /// address space
 pub struct MemorySet {
-    page_table: PageTable,
+    ///
+    pub page_table: PageTable,
     areas: Vec<MapArea>,
 }
 
@@ -43,6 +44,26 @@ impl MemorySet {
             page_table: PageTable::new(),
             areas: Vec::new(),
         }
+    }
+    ///un
+         pub fn unmap(&mut self,mut virs:VirtPageNum,vire:VirtPageNum)->isize{
+           while virs.0<vire.0{
+             match   self.page_table.find_pte(virs){
+                None=>{return -1;}
+                 Some(_b)=>{
+                    if !self.page_table.find_pte(virs).unwrap().is_valid()
+                    {
+                        return -1;
+                    }
+                    else if let Some(a)=self.areas.iter_mut().find(|area|{area.vpn_range.get_start()<=virs&&area.vpn_range.get_end()>virs}){
+                        a.unmap_one(&mut self.page_table, virs);
+                    }
+               
+                }
+             }
+             virs.step();
+           }
+           return 0;
     }
     /// Get the page table token
     pub fn token(&self) -> usize {

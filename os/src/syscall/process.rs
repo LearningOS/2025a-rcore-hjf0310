@@ -1,6 +1,10 @@
 //! Process management syscalls
 use alloc::sync::Arc;
-
+use alloc::vec::Vec;
+use crate::task::processor::{self};
+use crate::timer::get_time;
+use crate::mm::{page_table,VirtAddr,VirtPageNum,MapPermission,address::VPNRange};
+use crate::config::PAGE_SIZE;
 use crate::{
     loader::get_app_data_by_name,
     mm::{translated_refmut, translated_str},
@@ -110,16 +114,92 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
         "kernel:pid[{}] sys_get_time NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let time=get_time();
+    let t1=time/1_000_000;
+    let t2=time%1_000_000;
+    let mut v=Vec::new();
+    for i in 0..8{
+       v.push((t1>>i*8) as u8);
+    }
+    for i in 0..8{
+       v.push((t2>>i*8) as u8);
+    }
+    if let Some(inner)=processor::current_task(){
+        let to=inner.inner_exclusive_access().memory_set.token();
+        let mut x=page_table::translated_byte_buffer(to, _ts as *const u8, 128);
+        let mut u=0;
+        for i in x.iter_mut(){
+          for j in i.iter_mut(){
+              if u==16{
+                return 0;
+             }
+              *j=v[u];
+              u+=1;
+            }
+        }
+    }
+     
+    
+    0
 }
 
 /// YOUR JOB: Implement mmap.
-pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
+pub fn sys_mmap(_start: usize, _len: usize, port: usize) -> isize {
     trace!(
         "kernel:pid[{}] sys_mmap NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let strp = VirtAddr::from(_start);
+    if !strp.aligned(){
+        return -1;
+    }
+    if port&0x7==0||(port>>3)!=0{
+        return -1;
+    }
+
+    let real_len: usize=match _len/PAGE_SIZE
+    {
+        0=>0,
+        _=>{
+            if _len%PAGE_SIZE==0 {
+                _len/PAGE_SIZE
+            }
+            else {
+                _len/PAGE_SIZE+1
+            }
+        }
+    };
+   // let start_page:VirtPageNum=strp.into();
+    let endp=VirtAddr::from(_start+real_len*PAGE_SIZE);
+    let mut flags = MapPermission::from_bits_truncate(port as u8);
+     if port & 0b0000_0001 != 0 {
+            flags |= MapPermission::R;
+        }
+
+        if port & 0b0000_0010 != 0 {
+            flags |= MapPermission::W;
+        }
+
+        if port & 0b0000_0100 != 0 {
+            flags |= MapPermission::X;
+        }
+        flags |= MapPermission::U;
+    let inner=current_task().unwrap();
+    let mut inner1=inner.inner_exclusive_access();
+    let vstr:VirtPageNum=strp.floor();
+    let endv:VirtPageNum=endp.ceil();
+    let r=VPNRange::new(vstr, endv);
+    for i in r{
+        if let Some(_a)=inner1.memory_set.page_table.find_pte(i.into()){
+            if _a.is_valid()
+            {
+            return -1;
+            }
+        }
+    }
+    inner1.memory_set.insert_framed_area(strp, endp, flags);
+    0
+
 }
 
 /// YOUR JOB: Implement munmap.
@@ -128,6 +208,28 @@ pub fn sys_munmap(_start: usize, _len: usize) -> isize {
         "kernel:pid[{}] sys_munmap NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
+    let strp = VirtAddr::from(_start);
+    if !strp.aligned(){
+        return -1;
+    }
+    let real_len: usize=match _len/PAGE_SIZE
+    {
+        0=>0,
+        _=>{
+            if _len%PAGE_SIZE==0 {
+                _len/PAGE_SIZE
+            }
+            else {
+                _len/PAGE_SIZE+1
+            }
+        }
+    };
+    let endp=VirtAddr::from(_start+real_len*PAGE_SIZE);
+    let  inner=processor::current_task().unwrap();
+    let  mut inner1=inner.inner_exclusive_access();
+    if inner1.memory_set.unmap(strp.into(),endp.into())==0{
+            return 0;
+    }
     -1
 }
 
@@ -148,7 +250,15 @@ pub fn sys_spawn(_path: *const u8) -> isize {
         "kernel:pid[{}] sys_spawn NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let token=current_user_token();
+    let name=translated_str(token,_path);
+    let elf_data=get_app_data_by_name(&name);
+    let tcb=current_task().unwrap().spaw(elf_data.unwrap());
+    let  trap_x=tcb.inner_exclusive_access().get_trap_cx();
+    trap_x.x[10]=0;
+    let npid=tcb.getpid();
+    add_task(tcb);
+    npid as isize
 }
 
 // YOUR JOB: Set task priority.
@@ -157,5 +267,10 @@ pub fn sys_set_priority(_prio: isize) -> isize {
         "kernel:pid[{}] sys_set_priority NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    if _prio<2 {
+        return  -1;
+    }
+    let now=current_task();
+    now.unwrap().setpri(_prio)
+    //_prio
 }

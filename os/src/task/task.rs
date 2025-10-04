@@ -34,6 +34,11 @@ impl TaskControlBlock {
         let inner = self.inner_exclusive_access();
         inner.memory_set.token()
     }
+    ///
+    pub fn get_stride(&self)->isize{
+        let inner=self.inner_exclusive_access();
+        inner.stride
+    }
 }
 
 pub struct TaskControlBlockInner {
@@ -68,6 +73,10 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+    ///stride
+    pub stride:isize,
+    ///prioir
+    pub pri:isize,
 }
 
 impl TaskControlBlockInner {
@@ -118,6 +127,8 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    stride:0,
+                    pri:16,
                 })
             },
         };
@@ -132,6 +143,14 @@ impl TaskControlBlock {
         );
         task_control_block
     }
+     ///set pri
+     pub fn setpri(&self,prio:isize)->isize{
+        let mut inner=self.inner_exclusive_access();
+        inner.pri=prio;
+        inner.pri
+        
+     }
+     
 
     /// Load a new elf to replace the original application address space and start execution
     pub fn exec(&self, elf_data: &[u8]) {
@@ -191,6 +210,8 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    stride:parent_inner.stride,
+                    pri:parent_inner.pri,
                 })
             },
         });
@@ -205,7 +226,15 @@ impl TaskControlBlock {
         // **** release child PCB
         // ---- release parent PCB
     }
-
+    ///spaw
+    pub fn spaw(self: &Arc<Self>, elf_data: &[u8])->Arc<TaskControlBlock>{
+         let tcb=Self::new(elf_data);
+         tcb.inner_exclusive_access().parent=Some(Arc::downgrade(self));
+         let t1cb=Arc::new(tcb);
+         let mut p=self.inner_exclusive_access();
+         p.children.push(t1cb.clone());
+         t1cb
+    }
     /// get pid of process
     pub fn getpid(&self) -> usize {
         self.pid.0

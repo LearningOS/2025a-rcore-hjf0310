@@ -5,9 +5,11 @@
 //! and the replacement and transfer of control flow of different applications are executed.
 
 use super::__switch;
-use super::{fetch_task, TaskStatus};
+use super::{TaskStatus};
 use super::{TaskContext, TaskControlBlock};
+use crate::config::BIGSTRIDE;
 use crate::sync::UPSafeCell;
+use crate::task::manager::stride_task;
 use crate::trap::TrapContext;
 use alloc::sync::Arc;
 use lazy_static::*;
@@ -15,10 +17,10 @@ use lazy_static::*;
 /// Processor management structure
 pub struct Processor {
     ///The task currently executing on the current processor
-    current: Option<Arc<TaskControlBlock>>,
+    pub current: Option<Arc<TaskControlBlock>>,
 
     ///The basic control flow of each core, helping to select and switch process
-    idle_task_cx: TaskContext,
+    pub idle_task_cx: TaskContext,
 }
 
 impl Processor {
@@ -47,6 +49,7 @@ impl Processor {
 }
 
 lazy_static! {
+///
     pub static ref PROCESSOR: UPSafeCell<Processor> = unsafe { UPSafeCell::new(Processor::new()) };
 }
 
@@ -55,24 +58,24 @@ lazy_static! {
 pub fn run_tasks() {
     loop {
         let mut processor = PROCESSOR.exclusive_access();
-        if let Some(task) = fetch_task() {
+        if let Some(task) = stride_task() {
             let idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
             // access coming task TCB exclusively
             let mut task_inner = task.inner_exclusive_access();
             let next_task_cx_ptr = &task_inner.task_cx as *const TaskContext;
             task_inner.task_status = TaskStatus::Running;
+            task_inner.stride+=BIGSTRIDE as isize/task_inner.pri;
             // release coming task_inner manually
             drop(task_inner);
-            // release coming task TCB manually
+            // release coming task TCB manuallydle_task_cx_ptr, next_task_cx_ptr);
             processor.current = Some(task);
             // release processor manually
             drop(processor);
-            unsafe {
-                __switch(idle_task_cx_ptr, next_task_cx_ptr);
-            }
-        } else {
-            warn!("no tasks available in run_tasks");
+            unsafe { __switch(idle_task_cx_ptr, next_task_cx_ptr);} 
         }
+            else {
+            warn!("no tasks available in run_tasks");
+            }
     }
 }
 

@@ -46,19 +46,36 @@ pub struct TaskManagerInner {
     /// id of current `Running` task
     current_task: usize,
 }
-
 lazy_static! {
     /// Global variable: TASK_MANAGER
     pub static ref TASK_MANAGER: TaskManager = {
         let num_app = get_num_app();
+        let sys=TaskSyscall{
+            sysexit:0,
+            sysgettime:0,
+            systrace:0,
+            syswrite:0,
+            sysyield:0,
+        };
         let mut tasks = [TaskControlBlock {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
+            sys_num:sys,
+            sys_addr:0,
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
             task.task_status = TaskStatus::Ready;
+            task.sys_num=TaskSyscall{
+            sysexit:0,
+            sysgettime:0,
+            systrace:0,
+            syswrite:0,
+            sysyield:0,
+        };
+            task.sys_addr=get_base_i(i) as u8;
         }
+
         TaskManager {
             num_app,
             inner: unsafe {
@@ -70,7 +87,6 @@ lazy_static! {
         }
     };
 }
-
 impl TaskManager {
     /// Run the first task in task list.
     ///

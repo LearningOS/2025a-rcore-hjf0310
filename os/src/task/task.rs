@@ -9,6 +9,10 @@ pub struct TaskControlBlock {
     pub task_status: TaskStatus,
     /// The task context
     pub task_cx: TaskContext,
+    ///
+    pub sys_num: TaskSyscall,
+    ///addr
+    pub sys_addr:u8,
 }
 
 /// The status of a task
@@ -22,4 +26,19 @@ pub enum TaskStatus {
     Running,
     /// exited
     Exited,
+}
+
+///
+#[derive(Copy, Clone)]
+pub struct TaskSyscall{
+    ///
+    pub sysgettime:isize,
+    ///
+    pub systrace:isize,
+    ///
+    pub syswrite:isize,
+    ///
+    pub sysyield:isize,
+    ///
+    pub sysexit:isize,
 }

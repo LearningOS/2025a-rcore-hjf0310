@@ -8,13 +8,32 @@ use alloc::vec::Vec;
 use spin::{Mutex, MutexGuard};
 /// Virtual filesystem layer over easy-fs
 pub struct Inode {
-    block_id: usize,
-    block_offset: usize,
-    fs: Arc<Mutex<EasyFileSystem>>,
-    block_device: Arc<dyn BlockDevice>,
+    ///
+    pub block_id: usize,
+    ///
+    pub block_offset: usize,
+    ///
+    pub fs: Arc<Mutex<EasyFileSystem>>,
+    ///
+    pub block_device: Arc<dyn BlockDevice>,
 }
 
 impl Inode {
+    /// create link file
+    pub fn link(&mut self,inode:&Inode){
+          self.block_id=inode.block_id;
+          self.block_offset=inode.block_offset;
+
+    }
+    ///return information
+    pub fn info(&self)->Inode{
+        Self{
+            block_id:self.block_id,
+            block_offset:self.block_offset,
+            fs:Arc::clone(&self.fs),
+            block_device:Arc::clone(&self.block_device),            
+        }
+    }
     /// Create a vfs inode
     pub fn new(
         block_id: u32,
@@ -69,6 +88,7 @@ impl Inode {
                     block_offset,
                     self.fs.clone(),
                     self.block_device.clone(),
+
                 ))
             })
         })
@@ -137,6 +157,53 @@ impl Inode {
             self.block_device.clone(),
         )))
         // release efs lock automatically by compiler
+    }
+    ///create link
+    pub fn create_link(&self,name:&str,inode:Arc<Inode>)->Arc<Inode>{
+        let mut fs=self.fs.lock();
+        // initialize inode
+        let real_id=fs.get_inode_id(inode);
+        self.modify_disk_inode(|root_inode| {
+            // append file in the dirent
+            let file_count = (root_inode.size as usize) / DIRENT_SZ;
+            let new_size = (file_count + 1) * DIRENT_SZ;
+            // increase size
+            self.increase_size(new_size as u32, root_inode, &mut fs);
+            // write dirent
+            let dirent = DirEntry::new(name, real_id);
+            root_inode.write_at(
+                file_count * DIRENT_SZ,
+                dirent.as_bytes(),
+                &self.block_device,
+            );
+        });
+
+        let (block_id, block_offset) = fs.get_disk_inode_pos(real_id);
+        block_cache_sync_all();
+        // return inode
+        Arc::new(Self::new(
+            block_id as u32,
+            block_offset,
+            self.fs.clone(),
+            self.block_device.clone(),
+        ))
+         
+    }
+    ///delete link
+    pub fn un_link(&self,name:&str){
+        self.modify_disk_inode(|DInode|{
+            let file_count=(DInode.size as usize/DIRENT_SZ);
+            let mut buf =DirEntry::empty();
+            let q=DirEntry::empty();
+            for i in 0..file_count{
+                assert_eq!(DInode.read_at(DIRENT_SZ*i, buf.as_bytes_mut(),&self.block_device),DIRENT_SZ);
+                if buf.name()==name{
+                    DInode.write_at(DIRENT_SZ*i, q.as_bytes(), &self.block_device);
+                    break;
+                }
+            }
+
+        })
     }
     /// List inodes under current inode
     pub fn ls(&self) -> Vec<String> {

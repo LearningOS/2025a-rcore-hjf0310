@@ -1,12 +1,12 @@
 //! File trait & inode(dir, file, pipe, stdin, stdout)
 
-mod inode;
+pub mod inode;
 mod stdio;
 
 use crate::mm::UserBuffer;
-
+use::alloc::sync::Arc;
 /// trait File for all file types
-pub trait File: Send + Sync {
+pub trait File: Send + Sync + Info{
     /// the file readable?
     fn readable(&self) -> bool;
     /// the file writable?
@@ -16,7 +16,12 @@ pub trait File: Send + Sync {
     /// write to the file from buf, return the number of bytes written
     fn write(&self, buf: UserBuffer) -> usize;
 }
-
+///
+pub trait Info {
+    ///get the info
+    fn get_info(&self)->Option<Arc<OSInode>>;
+    
+}
 /// The stat of a inode
 #[repr(C)]
 #[derive(Debug)]
@@ -30,7 +35,7 @@ pub struct Stat {
     /// number of hard links
     pub nlink: u32,
     /// unused pad
-    pad: [u64; 7],
+    pub pad: [u64; 7],
 }
 
 bitflags! {

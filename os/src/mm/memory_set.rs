@@ -38,7 +38,8 @@ pub fn kernel_token() -> usize {
 
 /// address space
 pub struct MemorySet {
-    page_table: PageTable,
+    ///
+    pub page_table: PageTable,
     areas: Vec<MapArea>,
 }
 
@@ -49,6 +50,26 @@ impl MemorySet {
             page_table: PageTable::new(),
             areas: Vec::new(),
         }
+    }
+    ///
+             pub fn unmap(&mut self,mut virs:VirtPageNum,vire:VirtPageNum)->isize{
+           while virs.0<vire.0{
+             match   self.page_table.find_pte(virs){
+                None=>{return -1;}
+                 Some(_b)=>{
+                    if !self.page_table.find_pte(virs).unwrap().is_valid()
+                    {
+                        return -1;
+                    }
+                    else if let Some(a)=self.areas.iter_mut().find(|area|{area.vpn_range.get_start()<=virs&&area.vpn_range.get_end()>virs}){
+                        a.unmap_one(&mut self.page_table, virs);
+                    }
+               
+                }
+             }
+             virs.step();
+           }
+           return 0;
     }
     /// Get the page table token
     pub fn token(&self) -> usize {
@@ -328,6 +349,7 @@ pub struct MapArea {
 }
 
 impl MapArea {
+    ///
     pub fn new(
         start_va: VirtAddr,
         end_va: VirtAddr,
@@ -343,6 +365,7 @@ impl MapArea {
             map_perm,
         }
     }
+    ///
     pub fn from_another(another: &Self) -> Self {
         Self {
             vpn_range: VPNRange::new(another.vpn_range.get_start(), another.vpn_range.get_end()),
@@ -351,6 +374,7 @@ impl MapArea {
             map_perm: another.map_perm,
         }
     }
+    ///
     pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         let ppn: PhysPageNum;
         match self.map_type {
@@ -366,22 +390,26 @@ impl MapArea {
         let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
         page_table.map(vpn, ppn, pte_flags);
     }
+    ///
     pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         if self.map_type == MapType::Framed {
             self.data_frames.remove(&vpn);
         }
         page_table.unmap(vpn);
     }
+    ///
     pub fn map(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range {
             self.map_one(page_table, vpn);
         }
     }
+    ///
     pub fn unmap(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range {
             self.unmap_one(page_table, vpn);
         }
     }
+    ///
     #[allow(unused)]
     pub fn shrink_to(&mut self, page_table: &mut PageTable, new_end: VirtPageNum) {
         for vpn in VPNRange::new(new_end, self.vpn_range.get_end()) {
@@ -389,6 +417,7 @@ impl MapArea {
         }
         self.vpn_range = VPNRange::new(self.vpn_range.get_start(), new_end);
     }
+    ///
     #[allow(unused)]
     pub fn append_to(&mut self, page_table: &mut PageTable, new_end: VirtPageNum) {
         for vpn in VPNRange::new(self.vpn_range.get_end(), new_end) {
@@ -423,7 +452,9 @@ impl MapArea {
 #[derive(Copy, Clone, PartialEq, Debug)]
 /// map type for memory set: identical or framed
 pub enum MapType {
+    ///
     Identical,
+    ///
     Framed,
 }
 

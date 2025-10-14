@@ -10,7 +10,6 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefMut;
-
 /// Task control block structure
 ///
 /// Directly save the contents that will not change during running
@@ -35,6 +34,11 @@ impl TaskControlBlock {
     pub fn get_user_token(&self) -> usize {
         let inner = self.inner_exclusive_access();
         inner.memory_set.token()
+    }
+        ///
+    pub fn get_stride(&self)->isize{
+        let inner=self.inner_exclusive_access();
+        inner.stride
     }
 }
 
@@ -71,6 +75,10 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+        ///stride
+    pub stride:isize,
+    ///prioir
+    pub pri:isize,
 }
 
 impl TaskControlBlockInner {
@@ -135,6 +143,8 @@ impl TaskControlBlock {
                     ],
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    stride:0,
+                    pri:16,
                 })
             },
         };
@@ -149,7 +159,13 @@ impl TaskControlBlock {
         );
         task_control_block
     }
-
+    ///
+        pub fn setpri(&self,prio:isize)->isize{
+        let mut inner=self.inner_exclusive_access();
+        inner.pri=prio;
+        inner.pri
+        
+     }
     /// Load a new elf to replace the original application address space and start execution
     pub fn exec(&self, elf_data: &[u8]) {
         // memory_set with elf program headers/trampoline/trap context/user stack
@@ -216,6 +232,8 @@ impl TaskControlBlock {
                     fd_table: new_fd_table,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    stride:parent_inner.stride,
+                    pri:parent_inner.pri,
                 })
             },
         });
@@ -230,7 +248,15 @@ impl TaskControlBlock {
         // **** release child PCB
         // ---- release parent PCB
     }
-
+    ///
+       pub fn spaw(self: &Arc<Self>, elf_data: &[u8])->Arc<TaskControlBlock>{
+         let tcb=Self::new(elf_data);
+         tcb.inner_exclusive_access().parent=Some(Arc::downgrade(self));
+         let t1cb=Arc::new(tcb);
+         let mut p=self.inner_exclusive_access();
+         p.children.push(t1cb.clone());
+         t1cb
+    }
     /// get pid of process
     pub fn getpid(&self) -> usize {
         self.pid.0

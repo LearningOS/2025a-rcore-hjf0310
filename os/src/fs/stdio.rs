@@ -1,12 +1,13 @@
 //!Stdin & Stdout
+use alloc::sync::Arc;
+
 use super::File;
 use crate::mm::UserBuffer;
 use crate::sbi::console_getchar;
 use crate::task::suspend_current_and_run_next;
-
 /// stdin file for getting chars from console
 pub struct Stdin;
-
+use crate::fs::{Info, OSInode};
 /// stdout file for putting chars to console
 pub struct Stdout;
 
@@ -58,3 +59,16 @@ impl File for Stdout {
         user_buf.len()
     }
 }
+impl Info for Stdin{
+    fn get_info(&self)->Option<Arc<OSInode>>{
+        None
+        
+    }
+}
+impl Info for Stdout {
+    fn get_info(&self)->Option<Arc<OSInode>>{
+        None
+        
+    }
+}
+

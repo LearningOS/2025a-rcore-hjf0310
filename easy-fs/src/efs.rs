@@ -13,13 +13,29 @@ pub struct EasyFileSystem {
     pub inode_bitmap: Bitmap,
     ///Data bitmap
     pub data_bitmap: Bitmap,
-    inode_area_start_block: u32,
-    data_area_start_block: u32,
+    ///
+    pub inode_area_start_block: u32,
+    ///
+    pub data_area_start_block: u32,
+    ///
+    pub nlink:[u32;100],
 }
 
 type DataBlock = [u8; BLOCK_SZ];
 /// An easy fs over a block device
 impl EasyFileSystem {
+    ///return link_num
+    pub fn get_link_num(&self,id:u32)->u32{
+        self.nlink[id as usize]
+    }
+    ///sub link
+    pub fn sub_nlink(&mut self,id:u32){
+        self.nlink[id as usize]-=1;
+    }
+    ///ADD LINK
+    pub fn add_nlink(&mut self,id:u32){
+        self.nlink[id as usize]+=1;
+    }
     /// A data block of block size
     pub fn create(
         block_device: Arc<dyn BlockDevice>,
@@ -45,6 +61,7 @@ impl EasyFileSystem {
             data_bitmap,
             inode_area_start_block: 1 + inode_bitmap_blocks,
             data_area_start_block: 1 + inode_total_blocks + data_bitmap_blocks,
+            nlink:[0;100],
         };
         // clear all blocks
         for i in 0..total_blocks {
@@ -99,6 +116,7 @@ impl EasyFileSystem {
                     ),
                     inode_area_start_block: 1 + super_block.inode_bitmap_blocks,
                     data_area_start_block: 1 + inode_total_blocks + super_block.data_bitmap_blocks,
+                    nlink:[0;100],
                 };
                 Arc::new(Mutex::new(efs))
             })
@@ -120,6 +138,15 @@ impl EasyFileSystem {
             block_id,
             (inode_id % inodes_per_block) as usize * inode_size,
         )
+    }
+    ///get inode_id by inode
+    pub fn get_inode_id(&self,inode:Arc<Inode>)->u32{
+         let block_id=inode.block_id as u32;
+         let block_offset=inode.block_offset;
+         let inode_size = core::mem::size_of::<DiskInode>();
+         let inode_per_block=(BLOCK_SZ/inode_size) as u32;
+         let re_num=(block_offset/inode_size) as u32;
+         re_num+ (block_id-self.inode_area_start_block)*inode_per_block
     }
     /// Get data block by id
     pub fn get_data_block_id(&self, data_block_id: u32) -> u32 {

@@ -15,6 +15,8 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefMut;
 
+// const SYNC_RES_MAX: usize = 1145141919;
+
 /// Process Control Block
 pub struct ProcessControlBlock {
     /// immutable
@@ -49,6 +51,17 @@ pub struct ProcessControlBlockInner {
     pub semaphore_list: Vec<Option<Arc<Semaphore>>>,
     /// condvar list
     pub condvar_list: Vec<Option<Arc<Condvar>>>,
+    /// Available
+    pub mutex_available: Vec<isize>,
+    pub semaphore_available: Vec<isize>,
+    /// allocation[tid][res_id] = allocated resources in tid thread
+    pub mutex_allocation: Vec<Vec<isize>>,
+    pub semaphore_allocation: Vec<Vec<isize>>,
+    /// need[tid][res_id] = needed ...
+    pub mutex_need: Vec<Vec<isize>>,
+    pub semaphore_need: Vec<Vec<isize>>,
+    /// enable checker or not
+    pub deadlock_detect: bool,
 }
 
 impl ProcessControlBlockInner {
@@ -119,6 +132,13 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    mutex_available: Vec::new(),
+                    mutex_allocation: Vec::new(),
+                    mutex_need: Vec::new(),
+                    semaphore_available: Vec::new(),
+                    semaphore_allocation: Vec::new(),
+                    semaphore_need: Vec::new(),
+                    deadlock_detect: false,
                 })
             },
         });
@@ -245,6 +265,13 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    mutex_available: Vec::new(),
+                    mutex_allocation: vec![vec![]],
+                    mutex_need: vec![vec![]],
+                    semaphore_available: Vec::new(),
+                    semaphore_allocation: vec![vec![]],
+                    semaphore_need: vec![vec![]],
+                    deadlock_detect: parent.deadlock_detect,
                 })
             },
         });
@@ -281,5 +308,41 @@ impl ProcessControlBlock {
     /// get pid
     pub fn getpid(&self) -> usize {
         self.pid.0
+    }
+    /// deadlock_detect
+    pub fn detect(
+        &self,
+        inner: &ProcessControlBlockInner,
+        available: &Vec<isize>,
+        need: &Vec<Vec<isize>>,
+        allocation: &Vec<Vec<isize>>,
+        res_size: usize
+    ) -> bool {
+        let mut work: Vec<_> = available.clone();
+        let mut finish: Vec<_> = inner.tasks.iter().cloned().map(|t| t.is_none()).collect();//finnish  as 0
+        loop{
+            let mut _p=false;
+            for (tid,task) in inner.tasks.iter().enumerate(){
+                if finish[tid]{
+                    continue;
+                }
+                if let Some(_a)=task{
+                let is_delete=(0..res_size).all(|u| need[tid][u]<available[u]);
+                if is_delete{
+                    for i in 0..res_size{
+                        work[i]+=allocation[tid][i];
+                    }
+                    finish[tid]=true;
+                    _p=true;
+                    break;
+                }
+              }
+            }
+            if !_p{
+                break;
+            }
+        }
+        let ok = finish.iter().all(|&b| b);
+        ok
     }
 }

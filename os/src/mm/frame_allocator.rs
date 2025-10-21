@@ -42,7 +42,7 @@ trait FrameAllocator {
     fn alloc(&mut self) -> Option<PhysPageNum>;
     fn dealloc(&mut self, ppn: PhysPageNum);
 }
-
+///
 pub struct StackFrameAllocator {
     current: usize,
     end: usize,
@@ -50,6 +50,7 @@ pub struct StackFrameAllocator {
 }
 
 impl StackFrameAllocator {
+    ///
     pub fn init(&mut self, l: PhysPageNum, r: PhysPageNum) {
         self.current = l.0;
         self.end = r.0;
@@ -88,10 +89,12 @@ impl FrameAllocator for StackFrameAllocator {
 type FrameAllocatorImpl = StackFrameAllocator;
 
 lazy_static! {
+    ///
     pub static ref FRAME_ALLOCATOR: UPSafeCell<FrameAllocatorImpl> =
         unsafe { UPSafeCell::new(FrameAllocatorImpl::new()) };
 }
 
+///
 pub fn init_frame_allocator() {
     extern "C" {
         fn ekernel();
@@ -115,6 +118,7 @@ pub fn frame_dealloc(ppn: PhysPageNum) {
     FRAME_ALLOCATOR.exclusive_access().dealloc(ppn);
 }
 
+///
 #[allow(unused)]
 pub fn frame_allocator_test() {
     let mut v: Vec<FrameTracker> = Vec::new();

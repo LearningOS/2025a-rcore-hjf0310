@@ -1,13 +1,13 @@
 use crate::{
     fs::{open_file, OpenFlags},
-    mm::{translated_ref, translated_refmut, translated_str},
+    mm::{translated_byte_buffer,translated_ref, translated_refmut, translated_str},
     task::{
         current_process, current_task, current_user_token, exit_current_and_run_next, pid2process,
         suspend_current_and_run_next, SignalFlags,
     },
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
-
+use crate::timer::get_time;
 #[repr(C)]
 #[derive(Debug)]
 pub struct TimeVal {
@@ -152,11 +152,32 @@ pub fn sys_kill(pid: usize, signal: u32) -> isize {
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TimeVal`] is splitted by two pages ?
 pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_get_time NOT IMPLEMENTED",
-        current_task().unwrap().process.upgrade().unwrap().getpid()
-    );
-    -1
+    trace!("kernel: sys_get_time");
+    let to=current_process().inner_exclusive_access().get_user_token();
+    let time: usize=get_time();
+    let t1=time/1_000_000;
+    let t2=time%1_000_000;
+    let mut v=Vec::new();
+    for i in 0..8{
+       v.push((t1>>i*8) as u8);
+    }
+    for i in 0..8{
+       v.push((t2>>i*8) as u8);
+    }
+    //let realtime=t1|t2;
+    let mut x=translated_byte_buffer(to, _ts as *const u8, 128);
+    let mut u=0;
+    for i in x.iter_mut(){
+        for j in i.iter_mut(){
+            if u==16{
+                return 0;
+            }
+            *j=v[u];
+            u+=1;
+        }
+    }
+return 0;
+    
 }
 
 /// mmap syscall

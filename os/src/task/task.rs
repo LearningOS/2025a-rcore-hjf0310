@@ -52,6 +52,11 @@ impl TaskControlBlockInner {
     fn get_status(&self) -> TaskStatus {
         self.task_status
     }
+    ///
+    pub fn get_tid(&self)->usize{
+        let t=self.res.as_ref();
+        t.unwrap().tid
+    }
 }
 
 impl TaskControlBlock {
